@@ -1,10 +1,14 @@
 import express, { type Request, type Response } from "express";
+import { createServer } from "http";
+import { initializeSocket } from "./config/socket.ts";
 import ConnectDB from "./config/db.ts";
 import { config } from "dotenv";
 import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
 import fileUpload from "express-fileupload";
 import path from "node:path";
+import cron from "node-cron";
+import fs from "node:fs";
 import adminRouter from "./routes/admin.ts";
 import userRouter from "./routes/user.ts";
 import statsRouter from "./routes/stats.ts";
@@ -17,6 +21,9 @@ config();
 const port = process.env.PORT || 4000;
 const __dirname = path.resolve();
 const app = express();
+
+const httpServer = createServer(app);
+initializeSocket(httpServer);
 
 app.use(express.json());
 app.use(
@@ -37,6 +44,21 @@ app.use(
     },
   }),
 );
+
+const tempDir = path.join(process.cwd(), "tmp");
+cron.schedule("0 * * * *", () => {
+  if (fs.existsSync(tempDir)) {
+    fs.readdir(tempDir, (err, files) => {
+      if (err) {
+        console.log("error", err);
+        return;
+      }
+      for (const file of files) {
+        fs.unlink(path.join(tempDir, file), (err) => {});
+      }
+    });
+  }
+});
 app.get("/", (req: Request, res: Response) => {
   res.json({ message: "hello" });
 });

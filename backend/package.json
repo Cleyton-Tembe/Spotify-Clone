@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "serve": "node --watch src/server.ts"
+    "serve": "node --watch src/server.ts",
+    "seed:songs": "node src/seeds/songs.ts",
+    "seed:albums": "node src/seeds/albums.ts"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +29,7 @@
     "express": "^5.2.1",
     "express-fileupload": "^1.5.2",
     "mongoose": "^9.10.2",
+    "node-cron": "^4.6.0",
     "socket.io": "^4.8.4"
   }
 }
