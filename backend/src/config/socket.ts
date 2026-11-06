@@ -3,7 +3,9 @@ import { Server } from "socket.io";
 import { verifyToken } from "@clerk/backend";
 import { Message } from "../model/message.ts";
 
-const CLIENT_URL = "https://spotify-clone-8s82.onrender.com/";
+const CLIENT_URL = process.env.NODE_ENV
+  ? process.env.ORIGIN!
+  : "localhost:5173";
 
 // What a user is listening to; null = idle
 type Activity = { title: string; artist: string } | null;
