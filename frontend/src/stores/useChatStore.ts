@@ -4,7 +4,7 @@ import { getToken } from "@clerk/react";
 import axiosInstance from "../lib/axiosInstance";
 import type { Message, User } from "../types";
 
-const SOCKET_URL = "http://localhost:4000";
+const SOCKET_URL = import.meta.env.DEV ? "http://localhost:4000" : "/";
 
 export type Activity = { title: string; artist: string } | null;
 

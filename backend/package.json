@@ -6,8 +6,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "serve": "node --watch src/server.ts",
+    "start": "node src/server.ts",
     "seed:songs": "node src/seeds/songs.ts",
     "seed:albums": "node src/seeds/albums.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "keywords": [],
   "author": "",

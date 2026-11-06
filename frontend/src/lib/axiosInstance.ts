@@ -2,7 +2,7 @@ import axios from "axios";
 import { getToken } from "@clerk/react";
 
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:4000/api",
+  baseURL: import.meta.env.DEV ? "http://localhost:4000/api" : "/api",
   timeout: 10000,
   withCredentials: true,
 });

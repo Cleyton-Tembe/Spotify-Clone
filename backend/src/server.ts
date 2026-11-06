@@ -59,7 +59,7 @@ cron.schedule("0 * * * *", () => {
     });
   }
 });
-app.get("/", (req: Request, res: Response) => {
+app.get("/api/health", (req: Request, res: Response) => {
   res.json({ message: "hello" });
 });
 
@@ -71,6 +71,16 @@ app.use("/api/users", userRouter);
 
 app.use("/api/albums", albumRouter);
 app.use("/api/songs", songRouter);
+
+const frontendDist = path.join(import.meta.dirname, "../../frontend/dist");
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+
+  app.use((req: Request, res: Response, next) => {
+    if (req.method !== "GET" || req.path.startsWith("/api")) return next();
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+}
 
 httpServer.listen(port, () => {
   console.log("server started at: ", port);
