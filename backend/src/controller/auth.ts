@@ -3,20 +3,19 @@ import { User } from "../model/user.ts";
 
 const authCallBack = async (req: Request, res: Response) => {
   try {
-    const { id, firstName, lastName, imageUrl } = req.body;
+    const { id, firstName, lastName, imageUrl } = req.body ?? {};
 
-    if (!id && !firstName && !lastName && !imageUrl) {
+    if (!id || !imageUrl) {
       return res.status(400).json({ message: "you must fill all the fields" });
     }
 
     const dbUser = await User.findOne({ clerkId: id });
 
     if (!dbUser) {
-      await User.create({
-        clerkId: id,
-        fullName: `${firstName} ${lastName}`.trim(),
-        imageUrl: imageUrl,
-      });
+      const fullName =
+        [firstName, lastName].filter(Boolean).join(" ") || "Spotify User";
+
+      await User.create({ clerkId: id, fullName, imageUrl });
     }
 
     return res.status(200).json({ success: true });

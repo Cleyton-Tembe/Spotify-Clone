@@ -1,10 +1,11 @@
 import type { Request, Response } from "express";
+import { getAuth } from "@clerk/express";
 import { User } from "../model/user.ts";
 import { Message } from "../model/message.ts";
 
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
-    const currentUserId = req.auth.userId;
+    const { userId: currentUserId } = getAuth(req);
     const users = await User.find({ clerkId: { $ne: currentUserId } });
     return res.status(200).json(users);
   } catch (error) {
@@ -15,7 +16,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
 
 export const getMessages = async (req: Request, res: Response) => {
   try {
-    const myId = req.auth.userId;
+    const { userId: myId } = getAuth(req);
     const { userId } = req.params;
 
     const messages = await Message.find({

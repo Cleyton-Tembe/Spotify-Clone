@@ -11,32 +11,25 @@ const AuthCallbackPage = () => {
   const syncAttempted = useRef(false);
 
   useEffect(() => {
-    const syncUser = async () => {
-      if (!isLoaded || !user || syncAttempted.current) return;
+    if (!isLoaded || syncAttempted.current) return;
 
-      try {
-        syncAttempted.current = true;
+    if (!user) {
+      navigate("/", { replace: true });
+      return;
+    }
 
-        const response = await axiosInstance.post("/auth/callback", {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          imageUrl: user.imageUrl,
-        });
+    syncAttempted.current = true;
 
-        if (response && response.data) {
-          if (response.data.success) {
-            console.log("auth callback: ", response.data);
-          }
-        }
-      } catch (error) {
-        console.log("Error in auth callback", error);
-      } finally {
-        navigate("/");
-      }
-    };
-
-    syncUser();
+    axiosInstance
+      .post("/auth/callback", {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        imageUrl: user.imageUrl,
+      })
+      .then((res) => console.log("auth callback:", res.data))
+      .catch((error) => console.log("Error in auth callback", error))
+      .finally(() => navigate("/", { replace: true }));
   }, [isLoaded, user, navigate]);
 
   return (

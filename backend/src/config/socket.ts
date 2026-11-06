@@ -1,131 +1,103 @@
-import { Server } from "socket.io";
-import { Message } from "../model/message.ts";
 import type { Server as HttpServer } from "node:http";
-import type { IMessage } from "../interface/Imodel.ts";
+import { Server } from "socket.io";
+import { verifyToken } from "@clerk/backend";
+import { Message } from "../model/message.ts";
 
-interface UpdateActivityData {
-  userId: string;
-  activity: string;
-}
+const CLIENT_URL = "http://localhost:5173";
 
-interface SendMessageData {
-  senderId: string;
-  receiverId: string;
-  content: string;
-}
+// What a user is listening to; null = idle
+type Activity = { title: string; artist: string } | null;
 
-interface ServerToClientEvents {
-  user_connected: (userId: string) => void;
+const connectionCount = new Map<string, number>();
+const userActivities = new Map<string, Activity>();
 
-  users_online: (userIds: string[]) => void;
+const toActivity = (value: unknown): Activity => {
+  if (!value || typeof value !== "object") return null;
+  const { title, artist } = value as Record<string, unknown>;
+  if (typeof title !== "string" || typeof artist !== "string") return null;
+  return { title: title.slice(0, 200), artist: artist.slice(0, 200) };
+};
 
-  activities: (activities: [string, string][]) => void;
-
-  activity_updated: (data: UpdateActivityData) => void;
-
-  receive_message: (message: IMessage) => void;
-
-  message_sent: (message: IMessage) => void;
-
-  message_error: (error: string) => void;
-
-  user_disconnected: (userId: string) => void;
-}
-
-interface ClientToServerEvents {
-  user_connected: (userId: string) => void;
-
-  update_activity: (data: UpdateActivityData) => void;
-
-  send_message: (data: SendMessageData) => void;
-}
-
-export const initializeSocket = (
-  server: HttpServer,
-): Server<ClientToServerEvents, ServerToClientEvents> => {
-  const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
-    cors: {
-      origin: "http://localhost:3000",
-      credentials: true,
-    },
+export const initializeSocket = (server: HttpServer) => {
+  const io = new Server(server, {
+    cors: { origin: CLIENT_URL, credentials: true },
   });
 
-  // userId -> socketId
-  const userSockets = new Map<string, string>();
+  io.use(async (socket, next) => {
+    try {
+      const token: unknown = socket.handshake.auth?.token;
+      if (typeof token !== "string" || !token)
+        return next(new Error("Unauthorized"));
 
-  // userId -> activity
-  const userActivities = new Map<string, string>();
+      const payload = await verifyToken(token, {
+        secretKey: process.env.CLERK_SECRET_KEY!,
+        authorizedParties: [CLIENT_URL],
+      });
+
+      socket.data.userId = payload.sub;
+      next();
+    } catch {
+      next(new Error("Unauthorized"));
+    }
+  });
 
   io.on("connection", (socket) => {
-    socket.on("user_connected", (userId) => {
-      userSockets.set(userId, socket.id);
-      userActivities.set(userId, "Idle");
+    const userId: string = socket.data.userId;
 
-      // Notify everyone that this user is online
-      io.emit("user_connected", userId);
+    // One room per user
+    socket.join(userId);
 
-      // Send current online users to this client
-      socket.emit("users_online", Array.from(userSockets.keys()));
+    const count = (connectionCount.get(userId) ?? 0) + 1;
+    connectionCount.set(userId, count);
+    if (!userActivities.has(userId)) userActivities.set(userId, null);
 
-      // Send current activities
-      io.emit("activities", Array.from(userActivities.entries()));
-    });
+    // Send the current state to the newly connected tab
+    socket.emit("users_online", [...connectionCount.keys()]);
+    socket.emit("activities", [...userActivities.entries()]);
 
-    socket.on("update_activity", ({ userId, activity }) => {
-      console.log("Activity updated:", userId, activity);
+    if (count === 1) socket.broadcast.emit("user_connected", userId);
 
+    socket.on("update_activity", (value: unknown) => {
+      const activity = toActivity(value);
       userActivities.set(userId, activity);
-
-      io.emit("activity_updated", {
-        userId,
-        activity,
-      });
+      io.emit("activity_updated", { userId, activity });
     });
 
-    socket.on("send_message", async ({ senderId, receiverId, content }) => {
+    socket.on("send_message", async (data: unknown) => {
       try {
+        const { receiverId, content } = (data ?? {}) as Record<string, unknown>;
+        if (typeof receiverId !== "string" || typeof content !== "string")
+          return;
+
+        const text = content.trim().slice(0, 2000);
+        if (!text) return;
+
         const message = await Message.create({
-          senderId,
+          senderId: userId,
           receiverId,
-          content,
+          content: text,
         });
 
-        // Send message to receiver if online
-        const receiverSocketId = userSockets.get(receiverId);
-
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit("receive_message", message);
-        }
-
-        // Confirm message to sender
-        socket.emit("message_sent", message);
-      } catch (error: unknown) {
-        console.error("Message error:", error);
-
-        const errorMessage =
-          error instanceof Error ? error.message : "Failed to send message";
-
-        socket.emit("message_error", errorMessage);
+        io.to(receiverId).emit("receive_message", message); // receiver, all tabs
+        io.to(userId).emit("message_sent", message); // sender, all tabs
+      } catch (error) {
+        console.log("Error sending message", error);
+        socket.emit("message_error", "Couldn't send the message");
       }
     });
 
     socket.on("disconnect", () => {
-      let disconnectedUserId: string | undefined;
+      const remaining = (connectionCount.get(userId) ?? 1) - 1;
 
-      for (const [userId, socketId] of userSockets.entries()) {
-        if (socketId === socket.id) {
-          disconnectedUserId = userId;
-
-          userSockets.delete(userId);
-          userActivities.delete(userId);
-
-          break;
-        }
+      if (remaining > 0) {
+        connectionCount.set(userId, remaining);
+        return;
       }
 
-      if (disconnectedUserId) {
-        io.emit("user_disconnected", disconnectedUserId);
-      }
+      // Last tab closed: the user is offline
+      connectionCount.delete(userId);
+      userActivities.delete(userId);
+      io.emit("user_disconnected", userId);
     });
   });
 

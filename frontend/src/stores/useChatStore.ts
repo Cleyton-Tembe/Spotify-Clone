@@ -1,136 +1,175 @@
-import axiosInstance from "../lib/axiosInstance";
-import type { Message, User } from "../types/index";
 import { create } from "zustand";
-import { io } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
+import { getToken } from "@clerk/react";
+import axiosInstance from "../lib/axiosInstance";
+import type { Message, User } from "../types";
+
+const SOCKET_URL = "http://localhost:4000";
+
+export type Activity = { title: string; artist: string } | null;
 
 interface ChatStore {
-  users: User[];
-  isLoading: boolean;
-  error: string | null;
-  socket: any;
+  socket: Socket | null;
   isConnected: boolean;
   onlineUsers: Set<string>;
-  userActivities: Map<string, string>;
-  messages: Message[];
-  selectedUser: User | null;
+  userActivities: Map<string, Activity>;
+  myActivity: Activity;
 
-  fetchUsers: () => Promise<void>;
-  initSocket: (userId: string) => void;
+  users: User[];
+  isLoadingUsers: boolean;
+
+  selectedUser: User | null;
+  messages: Message[];
+  isLoadingMessages: boolean;
+
+  connectSocket: () => void;
   disconnectSocket: () => void;
-  sendMessage: (receiverId: string, senderId: string, content: string) => void;
-  fetchMessages: (userId: string) => Promise<void>;
+  updateActivity: (activity: Activity) => void;
+  fetchUsers: () => Promise<void>;
   setSelectedUser: (user: User | null) => void;
+  sendMessage: (receiverId: string, content: string) => void;
 }
 
-const baseURL =
-  import.meta.env.MODE === "development" ? "http://localhost:4000" : "/";
-
-const socket = io(baseURL, {
-  autoConnect: false, // only connect if user is authenticated
-  withCredentials: true,
-});
+const addMessage = (messages: Message[], message: Message) =>
+  messages.some((m) => m._id === message._id)
+    ? messages
+    : [...messages, message];
 
 export const useChatStore = create<ChatStore>((set, get) => ({
-  users: [],
-  isLoading: false,
-  error: null,
-  socket: socket,
+  socket: null,
   isConnected: false,
   onlineUsers: new Set(),
   userActivities: new Map(),
-  messages: [],
+  myActivity: null,
+
+  users: [],
+  isLoadingUsers: false,
+
   selectedUser: null,
+  messages: [],
+  isLoadingMessages: false,
 
-  setSelectedUser: (user) => set({ selectedUser: user }),
+  connectSocket: () => {
+    if (get().socket) return; // already connected
 
-  fetchUsers: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await axiosInstance.get("/users");
-      set({ users: response.data });
-    } catch (error: any) {
-      set({ error: error.response.data.message });
-    } finally {
-      set({ isLoading: false });
-    }
-  },
+    const socket = io(SOCKET_URL, {
+      withCredentials: true,
+      // A function, so every (re)connect sends a fresh Clerk token
+      auth: (cb) => {
+        getToken()
+          .then((token) => cb({ token }))
+          .catch(() => cb({ token: null }));
+      },
+    });
 
-  initSocket: (userId) => {
-    if (!get().isConnected) {
-      socket.auth = { userId };
-      socket.connect();
-
-      socket.emit("user_connected", userId);
-
-      socket.on("users_online", (users: string[]) => {
-        set({ onlineUsers: new Set(users) });
-      });
-
-      socket.on("activities", (activities: [string, string][]) => {
-        set({ userActivities: new Map(activities) });
-      });
-
-      socket.on("user_connected", (userId: string) => {
-        set((state) => ({
-          onlineUsers: new Set([...state.onlineUsers, userId]),
-        }));
-      });
-
-      socket.on("user_disconnected", (userId: string) => {
-        set((state) => {
-          const newOnlineUsers = new Set(state.onlineUsers);
-          newOnlineUsers.delete(userId);
-          return { onlineUsers: newOnlineUsers };
-        });
-      });
-
-      socket.on("receive_message", (message: Message) => {
-        set((state) => ({
-          messages: [...state.messages, message],
-        }));
-      });
-
-      socket.on("message_sent", (message: Message) => {
-        set((state) => ({
-          messages: [...state.messages, message],
-        }));
-      });
-
-      socket.on("activity_updated", ({ userId, activity }) => {
-        set((state) => {
-          const newActivities = new Map(state.userActivities);
-          newActivities.set(userId, activity);
-          return { userActivities: newActivities };
-        });
-      });
-
+    socket.on("connect", () => {
       set({ isConnected: true });
-    }
+      socket.emit("update_activity", get().myActivity); // re-announce after a reconnect
+    });
+    socket.on("disconnect", () => set({ isConnected: false }));
+    socket.on("connect_error", (err) =>
+      console.log("Socket connection error:", err.message),
+    );
+
+    socket.on("users_online", (ids: string[]) =>
+      set({ onlineUsers: new Set(ids) }),
+    );
+
+    socket.on("activities", (entries: [string, Activity][]) =>
+      set({ userActivities: new Map(entries) }),
+    );
+
+    socket.on("user_connected", (userId: string) =>
+      set((s) => ({ onlineUsers: new Set(s.onlineUsers).add(userId) })),
+    );
+
+    socket.on("user_disconnected", (userId: string) =>
+      set((s) => {
+        const onlineUsers = new Set(s.onlineUsers);
+        onlineUsers.delete(userId);
+        const userActivities = new Map(s.userActivities);
+        userActivities.delete(userId);
+        return { onlineUsers, userActivities };
+      }),
+    );
+
+    socket.on(
+      "activity_updated",
+      ({ userId, activity }: { userId: string; activity: Activity }) =>
+        set((s) => ({
+          userActivities: new Map(s.userActivities).set(userId, activity),
+        })),
+    );
+
+    socket.on("receive_message", (message: Message) => {
+      if (get().selectedUser?.clerkId === message.senderId) {
+        set((s) => ({ messages: addMessage(s.messages, message) }));
+      }
+    });
+
+    socket.on("message_sent", (message: Message) => {
+      if (get().selectedUser?.clerkId === message.receiverId) {
+        set((s) => ({ messages: addMessage(s.messages, message) }));
+      }
+    });
+
+    socket.on("message_error", (msg: string) => console.log(msg));
+
+    set({ socket });
   },
 
   disconnectSocket: () => {
-    if (get().isConnected) {
-      socket.disconnect();
-      set({ isConnected: false });
-    }
+    get().socket?.disconnect();
+    set({
+      socket: null,
+      isConnected: false,
+      onlineUsers: new Set(),
+      userActivities: new Map(),
+    });
   },
 
-  sendMessage: async (receiverId, senderId, content) => {
-    const socket = get().socket;
-    if (!socket) return;
-
-    socket.emit("send_message", { receiverId, senderId, content });
+  updateActivity: (activity) => {
+    set({ myActivity: activity });
+    const { socket } = get();
+    if (socket?.connected) socket.emit("update_activity", activity);
   },
 
-  fetchMessages: async (userId: string) => {
-    set({ isLoading: true, error: null });
+  fetchUsers: async () => {
+    set({ isLoadingUsers: true });
     try {
-      const response = await axiosInstance.get(`/users/messages/${userId}`);
-      set({ messages: response.data });
-    } catch (error: any) {
-      set({ error: error.response.data.message });
+      const res = await axiosInstance.get<User[]>("/users");
+      set({ users: res.data });
+    } catch (error) {
+      console.log("Error fetching users", error);
     } finally {
-      set({ isLoading: false });
+      set({ isLoadingUsers: false });
     }
+  },
+
+  setSelectedUser: async (user) => {
+    set({ selectedUser: user, messages: [], isLoadingMessages: !!user });
+    if (!user) return;
+
+    try {
+      const res = await axiosInstance.get<Message[]>(
+        `/users/messages/${user.clerkId}`,
+      );
+
+      if (get().selectedUser?.clerkId !== user.clerkId) return;
+
+      set((s) => ({ messages: s.messages.reduce(addMessage, res.data) }));
+    } catch (error) {
+      console.log("Error fetching messages", error);
+    } finally {
+      if (get().selectedUser?.clerkId === user.clerkId)
+        set({ isLoadingMessages: false });
+    }
+  },
+
+  sendMessage: (receiverId, content) => {
+    const text = content.trim();
+    const { socket } = get();
+    if (!text || !socket?.connected) return;
+    socket.emit("send_message", { receiverId, content: text });
   },
 }));

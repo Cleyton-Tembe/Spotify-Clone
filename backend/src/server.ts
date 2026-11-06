@@ -72,7 +72,7 @@ app.use("/api/users", userRouter);
 app.use("/api/albums", albumRouter);
 app.use("/api/songs", songRouter);
 
-app.listen(port, () => {
+httpServer.listen(port, () => {
   console.log("server started at: ", port);
   ConnectDB();
 });

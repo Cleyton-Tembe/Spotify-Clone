@@ -1,50 +1,57 @@
-import { usePlayerStore } from "@/stores/usePlayerStore";
 import { useEffect, useRef } from "react";
+import { audioRef, usePlayerStore } from "../../stores/usePlayerStore";
+import { useChatStore } from "../../stores/useChatStore";
 
 const AudioPlayer = () => {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const prevSongRef = useRef<string | null>(null);
+  const loadedUrl = useRef<string | null>(null);
+  const currentSong = usePlayerStore((s) => s.currentSong);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const playNext = usePlayerStore((s) => s.playNext);
+  const setIsPlaying = usePlayerStore((s) => s.setIsPlaying);
+  const repeatMode = usePlayerStore((s) => s.repeatMode);
+  const updateActivity = useChatStore((s) => s.updateActivity);
 
-  const { currentSong, isPlaying, playNext } = usePlayerStore();
-
-  // handle play/pause logic
-  useEffect(() => {
-    if (isPlaying) audioRef.current?.play();
-    else audioRef.current?.pause();
-  }, [isPlaying]);
-
-  // handle song ends
+  // Load a new song when it changes
   useEffect(() => {
     const audio = audioRef.current;
+    if (!audio || !currentSong) return;
 
-    const handleEnded = () => {
-      playNext();
-    };
-
-    audio?.addEventListener("ended", handleEnded);
-
-    return () => audio?.removeEventListener("ended", handleEnded);
-  }, [playNext]);
-
-  // handle song changes
-  useEffect(() => {
-    if (!audioRef.current || !currentSong) return;
-
-    const audio = audioRef.current;
-
-    // check if this is actually a new song
-    const isSongChange = prevSongRef.current !== currentSong?.audioUrl;
-    if (isSongChange) {
-      audio.src = currentSong?.audioUrl;
-      // reset the playback position
+    if (loadedUrl.current !== currentSong.audioUrl) {
+      audio.src = currentSong.audioUrl;
       audio.currentTime = 0;
-
-      prevSongRef.current = currentSong?.audioUrl;
-
-      if (isPlaying) audio.play();
+      loadedUrl.current = currentSong.audioUrl;
     }
-  }, [currentSong, isPlaying]);
+  }, [currentSong]);
 
-  return <audio ref={audioRef} />;
+  // Play / pause
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentSong) return;
+
+    if (isPlaying) {
+      audio.play().catch((err) => {
+        console.log("Couldn't play audio", err);
+        setIsPlaying(false);
+      });
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, currentSong, setIsPlaying]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.loop = repeatMode === "one";
+  }, [repeatMode]);
+
+  // Tell friends what I'm listening to (null = idle)
+  useEffect(() => {
+    updateActivity(
+      isPlaying && currentSong
+        ? { title: currentSong.title, artist: currentSong.artist }
+        : null,
+    );
+  }, [isPlaying, currentSong, updateActivity]);
+
+  return <audio ref={audioRef} onEnded={playNext} />;
 };
+
 export default AudioPlayer;

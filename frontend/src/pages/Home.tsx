@@ -1,50 +1,67 @@
-import { useMusicStore } from "@/stores/useMusicStore";
-import { useEffect } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { usePlayerStore } from "@/stores/usePlayerStore";
+import { useEffect, useState } from "react";
+import { ScrollArea } from "../components/ui/scroll-area";
 import NavBar from "../components/global/NavBar";
-import SectionGrid from "../components/home/SectionGrid";
 import FeaturedSection from "../components/home/FeaturedSection";
+import SectionGrid from "../components/home/SectionGrid";
+import axiosInstance from "../lib/axiosInstance";
+import type { Song } from "../types";
 
-const HomePage = () => {
-  const {
-    fetchFeaturedSongs,
-    fetchMadeForYouSongs,
-    fetchTrendingSongs,
-    isLoading,
-    madeForYouSongs,
-    featuredSongs,
-    trendingSongs,
-  } = useMusicStore();
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+};
 
-  const { initializeQueue } = usePlayerStore();
-
-  useEffect(() => {
-    fetchFeaturedSongs();
-    fetchMadeForYouSongs();
-    fetchTrendingSongs();
-  }, [fetchFeaturedSongs, fetchMadeForYouSongs, fetchTrendingSongs]);
+const Home = () => {
+  const [featuredSongs, setFeaturedSongs] = useState<Song[]>([]);
+  const [madeForYouSongs, setMadeForYouSongs] = useState<Song[]>([]);
+  const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (
-      madeForYouSongs.length > 0 &&
-      featuredSongs.length > 0 &&
-      trendingSongs.length > 0
-    ) {
-      const allSongs = [...featuredSongs, ...madeForYouSongs, ...trendingSongs];
-      initializeQueue(allSongs);
-    }
-  }, [initializeQueue, madeForYouSongs, trendingSongs, featuredSongs]);
+    let ignore = false; // avoids setting state twice in React StrictMode
+
+    const fetchSongs = async () => {
+      try {
+        const [featured, madeForYou, trending] = await Promise.all([
+          axiosInstance.get<Song[]>("/songs/featured"),
+          axiosInstance.get<Song[]>("/songs/made-for-you"),
+          axiosInstance.get<Song[]>("/songs/trending"),
+        ]);
+        if (ignore) return;
+        setFeaturedSongs(featured.data);
+        setMadeForYouSongs(madeForYou.data);
+        setTrendingSongs(trending.data);
+      } catch (err) {
+        console.log("Error fetching songs", err);
+        if (!ignore) setError("Couldn't load songs. Is the backend running?");
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
+    };
+
+    fetchSongs();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   return (
-    <main className="rounded-md overflow-hidden h-full bg-linear-to-b from-zinc-800 to-zinc-900">
+    <main className="h-full flex flex-col rounded-md overflow-hidden bg-linear-to-b from-zinc-800 to-zinc-900">
       <NavBar />
-      <ScrollArea className="h-[calc(100vh-180px)]">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 sm:p-6">
           <h1 className="text-2xl sm:text-3xl font-bold mb-6">
-            Good afternoon
+            {getGreeting()}
           </h1>
-          <FeaturedSection />
+
+          <FeaturedSection
+            songs={featuredSongs}
+            isLoading={isLoading}
+            error={error}
+          />
 
           <div className="space-y-8">
             <SectionGrid
@@ -63,4 +80,5 @@ const HomePage = () => {
     </main>
   );
 };
-export default HomePage;
+
+export default Home;

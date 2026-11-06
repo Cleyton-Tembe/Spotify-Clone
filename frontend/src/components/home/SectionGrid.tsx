@@ -1,6 +1,8 @@
 import { Button } from "../ui/button";
 import type { Song } from "../../types";
 import SectionGridSkeleton from "../skeletons/SectionGridSkeleton";
+import PlayButton from "./PlayButton";
+import { usePlayerStore } from "../../stores/usePlayerStore";
 
 type SectionGridProps = {
   title: string;
@@ -9,6 +11,8 @@ type SectionGridProps = {
 };
 
 const SectionGrid = ({ songs, title, isLoading }: SectionGridProps) => {
+  const { currentSong, isPlaying, playFromList } = usePlayerStore();
+
   if (isLoading) return <SectionGridSkeleton />;
 
   return (
@@ -24,25 +28,38 @@ const SectionGrid = ({ songs, title, isLoading }: SectionGridProps) => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {songs.map((song) => (
-          <div
-            key={song._id}
-            className="bg-zinc-800/40 p-4 rounded-md hover:bg-zinc-700/40 transition-all group cursor-pointer"
-          >
-            <div className="relative mb-4">
-              <div className="aspect-square rounded-md shadow-lg overflow-hidden">
-                <img
-                  src={song.imageUrl}
-                  alt={song.title}
-                  className="w-full h-full object-cover transition-transform duration-300 
-									group-hover:scale-105"
+        {songs.map((song, index) => {
+          const isCurrent = currentSong?._id === song._id;
+          return (
+            <button
+              type="button"
+              key={song._id}
+              onClick={() => playFromList(songs, index)}
+              className="text-left bg-zinc-800/40 p-4 rounded-md hover:bg-zinc-700/40 transition-all group cursor-pointer"
+            >
+              <div className="relative mb-4">
+                <div className="aspect-square rounded-md shadow-lg overflow-hidden">
+                  <img
+                    src={song.imageUrl}
+                    alt={song.title}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                </div>
+                <PlayButton
+                  isCurrent={isCurrent}
+                  isPlaying={isPlaying}
+                  className="absolute bottom-3 right-2"
                 />
               </div>
-            </div>
-            <h3 className="font-medium mb-2 truncate">{song.title}</h3>
-            <p className="text-sm text-zinc-400 truncate">{song.artist}</p>
-          </div>
-        ))}
+              <h3
+                className={`font-medium mb-2 truncate ${isCurrent ? "text-green-500" : ""}`}
+              >
+                {song.title}
+              </h3>
+              <p className="text-sm text-zinc-400 truncate">{song.artist}</p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

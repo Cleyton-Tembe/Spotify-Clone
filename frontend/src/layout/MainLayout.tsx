@@ -1,48 +1,46 @@
+import { useEffect, useState } from "react";
+import { Outlet } from "react-router-dom";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { Outlet } from "react-router-dom";
+} from "../components/ui/resizable";
 import LeftSidebar from "./components/LeftSidebar";
 import FriendsActivity from "./components/FriendsActivity";
+import PlaybackControls from "./components/PlaybackControls";
 import AudioPlayer from "./components/AudioPlayer";
-import { PlaybackControls } from "./components/PlaybackControls";
-import { useEffect, useState } from "react";
 
 const MainLayout = () => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
   return (
-    <div className="h-screen bg-black text-white flex flex-col">
+    <div className="h-screen bg-black text-white flex flex-col overflow-hidden">
+      <AudioPlayer />
+
       <ResizablePanelGroup
-        direction="horizontal"
-        className="flex-1 flex h-full overflow-hidden p-2"
+        orientation="horizontal"
+        className="flex-1 min-h-0 overflow-hidden p-2"
       >
-        <AudioPlayer />
-        {/* left sidebar */}
+        {/* LEFT SIDEBAR — strings = percentages */}
         <ResizablePanel
-          defaultSize={20}
-          minSize={isMobile ? 0 : 10}
-          maxSize={30}
+          defaultSize={isMobile ? "0" : "20"}
+          minSize={isMobile ? "0" : "10"}
+          maxSize="30"
         >
           <LeftSidebar />
         </ResizablePanel>
 
         <ResizableHandle className="w-2 bg-black rounded-lg transition-colors" />
 
-        {/* Main content */}
-        <ResizablePanel defaultSize={isMobile ? 80 : 60}>
+        {/* MAIN CONTENT */}
+        <ResizablePanel defaultSize={isMobile ? "100" : "60"} minSize="30">
           <Outlet />
         </ResizablePanel>
 
@@ -50,12 +48,13 @@ const MainLayout = () => {
           <>
             <ResizableHandle className="w-2 bg-black rounded-lg transition-colors" />
 
-            {/* right sidebar */}
+            {/* FRIENDS ACTIVITY */}
             <ResizablePanel
-              defaultSize={20}
-              minSize={0}
-              maxSize={25}
-              collapsedSize={0}
+              defaultSize="20"
+              minSize="0"
+              maxSize="25"
+              collapsible
+              collapsedSize="0"
             >
               <FriendsActivity />
             </ResizablePanel>
@@ -67,4 +66,5 @@ const MainLayout = () => {
     </div>
   );
 };
+
 export default MainLayout;
