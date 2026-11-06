@@ -6,6 +6,7 @@ import MainLayout from "./layout/MainLayout";
 import AlbumPage from "./pages/AlbumPage";
 import ChatPage from "./pages/ChatPage";
 import AdminPage from "./pages/admin/AdminPage";
+import NotFoundPage from "./pages/NotFoundPage";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/albums/:albumId" element={<AlbumPage />} />
         <Route path="/chat" element={<ChatPage />} />
       </Route>
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

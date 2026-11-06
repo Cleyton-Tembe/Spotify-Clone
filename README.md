@@ -11,11 +11,13 @@ Clone do Spotify com front-end em React e uma API em Express para músicas, álb
 ## Funcionalidades
 
 **Front-end**
+
 - Login com conta Google (Clerk OAuth)
 - Sincronização do utilizador com a base de dados no primeiro login
 - Página inicial com barra de navegação e botão de perfil
 
 **API (back-end)**
+
 - Músicas em destaque, "Feito para ti" e "Em alta" (selecção aleatória com agregações do MongoDB)
 - Lista de álbuns e detalhe de cada álbum com as suas músicas
 - Área de administração: criar e apagar músicas e álbuns, com upload do áudio e da capa para o Cloudinary
@@ -23,18 +25,18 @@ Clone do Spotify com front-end em React e uma API em Express para músicas, álb
 - Lista de utilizadores e histórico de mensagens entre utilizadores
 - Rotas protegidas: só utilizadores autenticados acedem; só o email definido como administrador acede à área de administração
 
-> **Em desenvolvimento:** o leitor de música, as páginas de álbum e o chat ainda não estão ligados no front-end.
+> **Em desenvolvimento:** responsividade.
 
 ## Tecnologias
 
-| Front-end | Back-end |
-|---|---|
-| React 18 + TypeScript | Node.js + Express 5 (TypeScript) |
-| Vite | MongoDB + Mongoose |
-| Tailwind CSS 4 + shadcn/ui | Clerk (`@clerk/express`) |
-| React Router | Cloudinary (áudio e imagens) |
-| Clerk (`@clerk/react`) | express-fileupload |
-| Axios | |
+| Front-end                  | Back-end                         |
+| -------------------------- | -------------------------------- |
+| React 18 + TypeScript      | Node.js + Express 5 (TypeScript) |
+| Vite                       | MongoDB + Mongoose               |
+| Tailwind CSS 4 + shadcn/ui | Clerk (`@clerk/express`)         |
+| React Router               | Cloudinary (áudio e imagens)     |
+| Clerk (`@clerk/react`)     | express-fileupload               |
+| Axios                      |                                  |
 
 ## Estrutura
 
