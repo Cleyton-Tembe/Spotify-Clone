@@ -2,17 +2,26 @@ import { useEffect } from "react";
 import { useAuth } from "@clerk/react";
 import { Loader } from "lucide-react";
 import { useChatStore } from "../stores/useChatStore";
+import { useAuthStore } from "../stores/useAuthStore";
 
 const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { isLoaded, isSignedIn } = useAuth();
   const connectSocket = useChatStore((s) => s.connectSocket);
   const disconnectSocket = useChatStore((s) => s.disconnectSocket);
+  const checkAdmin = useAuthStore((s) => s.checkAdmin);
+  const resetAdmin = useAuthStore((s) => s.resetAdmin);
 
   useEffect(() => {
     if (!isSignedIn) return;
     connectSocket();
     return () => disconnectSocket(); // sign out / unmount
   }, [isSignedIn, connectSocket, disconnectSocket]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (isSignedIn) checkAdmin();
+    else resetAdmin();
+  }, [isLoaded, isSignedIn, checkAdmin, resetAdmin]);
 
   if (!isLoaded)
     return (

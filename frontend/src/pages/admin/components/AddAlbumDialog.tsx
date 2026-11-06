@@ -1,173 +1,158 @@
-import { Button } from "../../../components/ui/button";
+import { useState, type FormEvent } from "react";
+import { Loader, Plus } from "lucide-react";
+import Modal from "./Modal";
+import FilePicker from "./FilePicker";
+import { getErrorMessage, useAdminStore } from "../../../stores/useAdminStore";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import axiosInstance from "@/lib/axiosInstance";
-import { Plus, Upload } from "lucide-react";
-import { useRef, useState } from "react";
-import toast from "react-hot-toast";
+  inputClass,
+  labelClass,
+  primaryButton,
+  secondaryButton,
+} from "../../../helpers/formStyle";
 
 const AddAlbumDialog = () => {
-  const [albumDialogOpen, setAlbumDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [newAlbum, setNewAlbum] = useState({
-    title: "",
-    artist: "",
-    releaseYear: new Date().getFullYear(),
-  });
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={primaryButton}
+      >
+        <Plus className="size-4" /> Add Album
+      </button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        locked={isSubmitting}
+        title="Add new album"
+        description="Add a new album to your collection"
+      >
+        <AlbumForm
+          onDone={() => setOpen(false)}
+          onSubmittingChange={setIsSubmitting}
+        />
+      </Modal>
+    </>
+  );
+};
 
+type AlbumFormProps = {
+  onDone: () => void;
+  onSubmittingChange: (busy: boolean) => void;
+};
+
+const AlbumForm = ({ onDone, onSubmittingChange }: AlbumFormProps) => {
+  const createAlbum = useAdminStore((s) => s.createAlbum);
+  const [title, setTitle] = useState("");
+  const [artist, setArtist] = useState("");
+  const [releaseYear, setReleaseYear] = useState(
+    String(new Date().getFullYear()),
+  );
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-    }
-  };
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!imageFile) return setError("Please choose a cover image.");
 
-  const handleSubmit = async () => {
-    setIsLoading(true);
+    const data = new FormData();
+    data.append("title", title.trim());
+    data.append("artist", artist.trim());
+    data.append("releaseYear", releaseYear);
+    data.append("imageFile", imageFile);
 
+    setError(null);
+    setIsSubmitting(true);
+    onSubmittingChange(true);
     try {
-      if (!imageFile) {
-        return toast.error("Please upload an image");
-      }
-
-      const formData = new FormData();
-      formData.append("title", newAlbum.title);
-      formData.append("artist", newAlbum.artist);
-      formData.append("releaseYear", newAlbum.releaseYear.toString());
-      formData.append("imageFile", imageFile);
-
-      await axiosInstance.post("/admin/albums", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
-      setNewAlbum({
-        title: "",
-        artist: "",
-        releaseYear: new Date().getFullYear(),
-      });
-      setImageFile(null);
-      setAlbumDialogOpen(false);
-      toast.success("Album created successfully");
-    } catch (error: any) {
-      toast.error("Failed to create album: " + error.message);
+      await createAlbum(data);
+      onDone();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't create the album"));
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
+      onSubmittingChange(false);
     }
   };
 
   return (
-    <Dialog open={albumDialogOpen} onOpenChange={setAlbumDialogOpen}>
-      <DialogTrigger asChild>
-        <Button className="bg-violet-500 hover:bg-violet-600 text-white">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Album
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="bg-zinc-900 border-zinc-700">
-        <DialogHeader>
-          <DialogTitle>Add New Album</DialogTitle>
-          <DialogDescription>
-            Add a new album to your collection
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageSelect}
-            accept="image/*"
-            className="hidden"
-          />
-          <div
-            className="flex items-center justify-center p-6 border-2 border-dashed border-zinc-700 rounded-lg cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <div className="text-center">
-              <div className="p-3 bg-zinc-800 rounded-full inline-block mb-2">
-                <Upload className="h-6 w-6 text-zinc-400" />
-              </div>
-              <div className="text-sm text-zinc-400 mb-2">
-                {imageFile ? imageFile.name : "Upload album artwork"}
-              </div>
-              <Button variant="outline" size="sm" className="text-xs">
-                Choose File
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Album Title</label>
-            <Input
-              value={newAlbum.title}
-              onChange={(e) =>
-                setNewAlbum({ ...newAlbum, title: e.target.value })
-              }
-              className="bg-zinc-800 border-zinc-700"
-              placeholder="Enter album title"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Artist</label>
-            <Input
-              value={newAlbum.artist}
-              onChange={(e) =>
-                setNewAlbum({ ...newAlbum, artist: e.target.value })
-              }
-              className="bg-zinc-800 border-zinc-700"
-              placeholder="Enter artist name"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Release Year</label>
-            <Input
-              type="number"
-              value={newAlbum.releaseYear}
-              onChange={(e) =>
-                setNewAlbum({
-                  ...newAlbum,
-                  releaseYear: parseInt(e.target.value),
-                })
-              }
-              className="bg-zinc-800 border-zinc-700"
-              placeholder="Enter release year"
-              min={1900}
-              max={new Date().getFullYear()}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setAlbumDialogOpen(false)}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            className="bg-violet-500 hover:bg-violet-600"
-            disabled={
-              isLoading || !imageFile || !newAlbum.title || !newAlbum.artist
-            }
-          >
-            {isLoading ? "Creating..." : "Add Album"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <FilePicker
+        label="Cover image"
+        accept="image/*"
+        file={imageFile}
+        onChange={setImageFile}
+        disabled={isSubmitting}
+        preview
+      />
+
+      <div>
+        <label htmlFor="album-title" className={labelClass}>
+          Title
+        </label>
+        <input
+          id="album-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          disabled={isSubmitting}
+          className={inputClass}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="album-artist" className={labelClass}>
+          Artist
+        </label>
+        <input
+          id="album-artist"
+          value={artist}
+          onChange={(e) => setArtist(e.target.value)}
+          required
+          disabled={isSubmitting}
+          className={inputClass}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="album-year" className={labelClass}>
+          Release year
+        </label>
+        <input
+          id="album-year"
+          type="number"
+          min={1900}
+          max={new Date().getFullYear() + 1}
+          value={releaseYear}
+          onChange={(e) => setReleaseYear(e.target.value)}
+          required
+          disabled={isSubmitting}
+          className={inputClass}
+        />
+      </div>
+
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onDone}
+          disabled={isSubmitting}
+          className={secondaryButton}
+        >
+          Cancel
+        </button>
+        <button type="submit" disabled={isSubmitting} className={primaryButton}>
+          {isSubmitting && <Loader className="size-4 animate-spin" />}
+          {isSubmitting ? "Creating" : "Add Album"}
+        </button>
+      </div>
+    </form>
   );
 };
+
 export default AddAlbumDialog;

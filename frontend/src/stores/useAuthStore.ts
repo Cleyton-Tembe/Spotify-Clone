@@ -1,33 +1,26 @@
-import axiosInstance from "../lib/axiosInstance";
 import { create } from "zustand";
+import axiosInstance from "../lib/axiosInstance";
+
+type AdminStatus = "unknown" | "checking" | "admin" | "not-admin";
 
 interface AuthStore {
-  isAdmin: boolean;
-  isLoading: boolean;
-  error: string | null;
-
-  checkAdminStatus: () => Promise<void>;
-  reset: () => void;
+  adminStatus: AdminStatus;
+  checkAdmin: () => Promise<void>;
+  resetAdmin: () => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
-  isAdmin: false,
-  isLoading: false,
-  error: null,
+  adminStatus: "unknown",
 
-  checkAdminStatus: async () => {
-    set({ isLoading: true, error: null });
+  checkAdmin: async () => {
+    set({ adminStatus: "checking" });
     try {
-      const response = await axiosInstance.get("/admin/check");
-      set({ isAdmin: response.data.admin });
-    } catch (error: any) {
-      set({ isAdmin: false, error: error.response.data.message });
-    } finally {
-      set({ isLoading: false });
+      await axiosInstance.get("/admin/check");
+      set({ adminStatus: "admin" });
+    } catch {
+      set({ adminStatus: "not-admin" });
     }
   },
 
-  reset: () => {
-    set({ isAdmin: false, isLoading: false, error: null });
-  },
+  resetAdmin: () => set({ adminStatus: "not-admin" }),
 }));

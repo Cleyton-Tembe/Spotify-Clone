@@ -1,76 +1,66 @@
 import type { Request, Response } from "express";
+import { unlink } from "node:fs/promises";
 import { Song } from "../model/song.ts";
 import { Album } from "../model/album.ts";
 import cloudinary from "../config/cloudinary.ts";
 import type { UploadedFile } from "express-fileupload";
 
-const uploadToCloudinary = async (file: UploadedFile | UploadedFile[]) => {
+const firstFile = (file: UploadedFile | UploadedFile[] | undefined) =>
+  Array.isArray(file) ? file[0] : file;
+
+const uploadToCloudinary = async (file: UploadedFile) => {
   try {
-    if (!file) {
-      return console.error("no file provided at uploadToCloudinary");
-    }
-
-    const uploadedFile = Array.isArray(file) ? file[0] : file;
-
-    if (!uploadedFile) {
-      return console.error("no file provided at uploadToCloudinary");
-    }
-
-    const result = await cloudinary.uploader.upload(uploadedFile.tempFilePath, {
+    const result = await cloudinary.uploader.upload(file.tempFilePath, {
       resource_type: "auto",
     });
-
     return result.secure_url;
-  } catch (error) {
-    console.error("uploadToCloudinary: ", error);
+  } finally {
+    await unlink(file.tempFilePath).catch(() => {});
   }
 };
 
 export const createSong = async (req: Request, res: Response) => {
   try {
-    if (!req.files || !req.files.audioFile || !req.files.imageFile) {
-      return res.status(400).json({ message: "You must upload all files" });
+    const audioFile = firstFile(req.files?.audioFile);
+    const imageFile = firstFile(req.files?.imageFile);
+
+    if (!audioFile || !imageFile) {
+      return res
+        .status(400)
+        .json({ message: "You must upload an audio file and an image" });
     }
 
     const { title, artist, albumId, duration } = req.body;
 
     if (!title || !artist || !duration) {
-      return res.status(400).json({
-        message:
-          "Well not only the files but the params of the song must be uploaded!",
-      });
-    }
-
-    const audioFile = req.files.audioFile;
-    const imageFile = req.files.imageFile;
-
-    if (!audioFile && !imageFile) {
       return res
         .status(400)
-        .json({ message: "image and audio file must be uploaded" });
+        .json({ message: "Title, artist and duration are required" });
     }
 
-    const audioUrl = await uploadToCloudinary(audioFile);
-    const imageUrl = await uploadToCloudinary(imageFile);
+    if (albumId && !(await Album.exists({ _id: albumId }))) {
+      return res.status(400).json({ message: "That album doesn't exist" });
+    }
 
-    const song = new Song({
+    const [audioUrl, imageUrl] = await Promise.all([
+      uploadToCloudinary(audioFile),
+      uploadToCloudinary(imageFile),
+    ]);
+
+    const song = await Song.create({
       title,
       artist,
       audioUrl,
       imageUrl,
-      duration,
+      duration: Number(duration),
       albumId: albumId || null,
     });
 
-    await song.save();
-
     if (albumId) {
-      await Album.findByIdAndUpdate(albumId, {
-        $push: { songs: song._id },
-      });
+      await Album.findByIdAndUpdate(albumId, { $push: { songs: song._id } });
     }
 
-    return res.status(201).json({ song: song });
+    return res.status(201).json({ song });
   } catch (error) {
     console.error("createSong: ", error);
     return res.status(500).json({ message: "something went wrong" });
@@ -82,12 +72,16 @@ export const deleteSong = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     if (!id) {
-      res.status(400).json({ message: "no id provided fellow" });
+      return res.status(400).json({ message: "no id provided fellow" });
     }
 
-    const song = await Song.findById({ id: id });
+    const song = await Song.findById(id);
 
-    if (song && song.albumId) {
+    if (!song) {
+      return res.status(404).json({ message: "Song not found" });
+    }
+
+    if (song.albumId) {
       await Album.findByIdAndUpdate(song.albumId, {
         $pull: { songs: song._id },
       });
@@ -104,28 +98,26 @@ export const deleteSong = async (req: Request, res: Response) => {
 export const createAlbum = async (req: Request, res: Response) => {
   try {
     const { title, artist, releaseYear } = req.body;
-    const { imageFile } = req.files ?? {};
+    const imageFile = firstFile(req.files?.imageFile);
 
     if (!imageFile) {
-      return res.status(400).json({ error: "upload a file" });
+      return res.status(400).json({ message: "Upload a cover image" });
     }
 
-    const file = Array.isArray(imageFile) ? imageFile[0] : imageFile;
-
-    if (!file) {
-      return res.status(400).json({ error: "File not valid" });
+    if (!title || !artist || !releaseYear) {
+      return res
+        .status(400)
+        .json({ message: "Title, artist and release year are required" });
     }
 
     const imageUrl = await uploadToCloudinary(imageFile);
 
-    const album = new Album({
+    const album = await Album.create({
       title,
       artist,
       imageUrl,
-      releaseYear,
+      releaseYear: Number(releaseYear),
     });
-
-    await album.save();
 
     return res.status(201).json(album);
   } catch (error) {
