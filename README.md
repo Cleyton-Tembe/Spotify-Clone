@@ -6,7 +6,7 @@ Clone do Spotify com front-end em React e uma API em Express para músicas, álb
 
 ## Demo
 
-🔗 **[Ver demo](COLOCA_AQUI_O_LINK_DA_DEMO)**
+🔗 **[Ver demo](https://spotify-clone-8s82.onrender.com/)**
 
 ## Funcionalidades
 
