@@ -28,7 +28,10 @@ initializeSocket(httpServer);
 app.use(express.json());
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "https://spotify-clone-8s82.onrender.com/",
+    ],
     credentials: true,
   }),
 );

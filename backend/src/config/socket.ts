@@ -3,7 +3,7 @@ import { Server } from "socket.io";
 import { verifyToken } from "@clerk/backend";
 import { Message } from "../model/message.ts";
 
-const CLIENT_URL = "http://localhost:5173";
+const CLIENT_URL = "https://spotify-clone-8s82.onrender.com/";
 
 // What a user is listening to; null = idle
 type Activity = { title: string; artist: string } | null;
